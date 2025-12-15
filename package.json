@@ -3,24 +3,34 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3005",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start -p 3005",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "16.0.10",
-    "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "fabric": "^5.3.0",
+    "immer": "^10.1.1",
+    "lucide-react": "^0.468.0",
+    "next": "15.1.2",
+    "pdf-lib": "^1.17.1",
+    "pptxgenjs": "^3.12.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/fabric": "^5.3.10",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.0.10",
-    "tailwindcss": "^4",
+    "eslint-config-next": "15.1.2",
+    "postcss": "^8",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5"
   }
 }

@@ -1,0 +1,73 @@
+{
+    "social": [
+        {
+            "id": "instagram-post",
+            "name": "Instagram Post",
+            "width": 1080,
+            "height": 1080,
+            "dpi": 72
+        },
+        {
+            "id": "instagram-story",
+            "name": "Instagram Story",
+            "width": 1080,
+            "height": 1920,
+            "dpi": 72
+        },
+        {
+            "id": "facebook-post",
+            "name": "Facebook Post",
+            "width": 1200,
+            "height": 630,
+            "dpi": 72
+        },
+        {
+            "id": "youtube-thumbnail",
+            "name": "YouTube Thumbnail",
+            "width": 1280,
+            "height": 720,
+            "dpi": 72
+        }
+    ],
+    "documents": [
+        {
+            "id": "a4-portrait",
+            "name": "A4 Portrait",
+            "width": 2480,
+            "height": 3508,
+            "dpi": 300
+        },
+        {
+            "id": "letter-portrait",
+            "name": "Letter Portrait",
+            "width": 2550,
+            "height": 3300,
+            "dpi": 300
+        }
+    ],
+    "presentations": [
+        {
+            "id": "presentation-16-9",
+            "name": "Presentation 16:9",
+            "width": 1920,
+            "height": 1080,
+            "dpi": 72
+        }
+    ],
+    "video": [
+        {
+            "id": "video-1080p",
+            "name": "Video 1080p",
+            "width": 1920,
+            "height": 1080,
+            "dpi": 72
+        },
+        {
+            "id": "video-4k",
+            "name": "Video 4K",
+            "width": 3840,
+            "height": 2160,
+            "dpi": 72
+        }
+    ]
+}
