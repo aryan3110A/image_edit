@@ -4,9 +4,97 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { getFabricCanvas, resetFabricCanvas } from '@/engine/fabric/FabricCanvas';
 import { useEditorStore, useActivePage } from '@/store/editorStore';
 import { useCanvasStore } from '@/store/canvasStore';
+import { CropOverlay } from './CropOverlay';
+import { Lock } from 'lucide-react';
 
 interface CanvasStageProps {
     className?: string;
+}
+
+// Lock Icon Overlay Component - Shows lock icon when locked element is clicked
+function LockIconOverlay({ displayScale }: { displayScale: number }) {
+    const activePage = useActivePage();
+    const unlockElement = useCanvasStore((state) => state.unlockElement);
+    const [clickedLockedId, setClickedLockedId] = useState<string | null>(null);
+
+    // Auto-hide lock icon after 3 seconds
+    useEffect(() => {
+        if (clickedLockedId) {
+            const timer = setTimeout(() => {
+                setClickedLockedId(null);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [clickedLockedId]);
+
+    if (!activePage) return null;
+
+    const lockedElements = activePage.elements.filter(el => el.locked);
+
+    if (lockedElements.length === 0) return null;
+
+    return (
+        <>
+            {lockedElements.map(element => {
+                const { x, y, width, height, scaleX, scaleY } = element.transform;
+
+                // Calculate element bounds (center-based origin)
+                const elementWidth = width * Math.abs(scaleX || 1);
+                const elementHeight = height * Math.abs(scaleY || 1);
+
+                // Element position (top-left corner)
+                const elementLeft = (x - elementWidth / 2) * displayScale;
+                const elementTop = (y - elementHeight / 2) * displayScale;
+                const scaledWidth = elementWidth * displayScale;
+                const scaledHeight = elementHeight * displayScale;
+
+                // Lock icon position at top-right corner
+                const iconX = elementLeft + scaledWidth - 8;
+                const iconY = elementTop - 8;
+
+                const isClicked = clickedLockedId === element.id;
+
+                return (
+                    <div key={`lock-area-${element.id}`}>
+                        {/* Invisible clickable area over locked element */}
+                        <div
+                            className="absolute cursor-pointer"
+                            style={{
+                                left: elementLeft,
+                                top: elementTop,
+                                width: scaledWidth,
+                                height: scaledHeight,
+                                zIndex: 999,
+                            }}
+                            onClick={() => setClickedLockedId(element.id)}
+                        />
+
+                        {/* Lock icon - only visible when this element is clicked */}
+                        {isClicked && (
+                            <div
+                                className="absolute cursor-pointer animate-in fade-in zoom-in duration-200"
+                                style={{
+                                    left: iconX,
+                                    top: iconY,
+                                    zIndex: 1001,
+                                }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    unlockElement(element.id);
+                                    setClickedLockedId(null);
+                                }}
+                                title="Click to unlock"
+                            >
+                                <div className="w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center hover:scale-110 transition-all">
+                                    <Lock size={16} className="text-purple-600" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </>
+    );
 }
 
 export function CanvasStage({ className }: CanvasStageProps) {
@@ -86,6 +174,7 @@ export function CanvasStage({ className }: CanvasStageProps) {
         });
 
         // Set up event handlers
+        // Set up event handlers
         fabricCanvas.onSelectionChange = (selectedIds) => {
             if (selectedIds.length === 0) {
                 deselect();
@@ -93,6 +182,47 @@ export function CanvasStage({ className }: CanvasStageProps) {
                 select(selectedIds);
             }
         };
+
+        const updateStoreFromFabric = (id: string) => {
+            const fabricObject = fabricCanvas.getObjectById(id);
+            if (!fabricObject) return;
+
+            // Get current active page ID
+            const state = useEditorStore.getState();
+            if (!state.project) return;
+
+            const activePageId = state.project.activePageId;
+            const activePage = state.project.pages.find(p => p.id === activePageId);
+            if (!activePage) return;
+
+            const element = activePage.elements.find(el => el.id === id);
+            if (!element) return;
+
+            // Update element in store with new transform values
+            // We use updatePage directly to avoid circular updates if we used canvasStore.updateTransform
+            // (since updateTransform also tries to update fabric object)
+            const updatedElements = activePage.elements.map(el => {
+                if (el.id === id) {
+                    return {
+                        ...el,
+                        transform: {
+                            ...el.transform,
+                            x: fabricObject.left ?? el.transform.x,
+                            y: fabricObject.top ?? el.transform.y,
+                            scaleX: fabricObject.scaleX ?? el.transform.scaleX,
+                            scaleY: fabricObject.scaleY ?? el.transform.scaleY,
+                            rotation: fabricObject.angle ?? el.transform.rotation,
+                        }
+                    };
+                }
+                return el;
+            });
+
+            state.updatePage(activePageId, { elements: updatedElements });
+        };
+
+        fabricCanvas.onObjectModified = updateStoreFromFabric;
+        fabricCanvas.onObjectUpdating = updateStoreFromFabric;
 
         setIsInitialized(true);
 
@@ -102,21 +232,31 @@ export function CanvasStage({ className }: CanvasStageProps) {
         };
     }, []);
 
-    // Load page when it changes
+    // Load page when it changes (page ID or dimensions change)
     useEffect(() => {
         if (!isInitialized || !activePage) return;
 
         const fabricCanvas = getFabricCanvas();
         fabricCanvas.loadPage(activePage);
-    }, [activePage, isInitialized]);
+    }, [activePage?.id, activePage?.width, activePage?.height, isInitialized]);
 
-    // Update zoom
+    // Update background immediately when it changes (for real-time gradient updates)
     useEffect(() => {
-        if (!isInitialized) return;
+        if (!isInitialized || !activePage?.background) return;
 
         const fabricCanvas = getFabricCanvas();
-        fabricCanvas.setZoom(zoom);
-    }, [zoom, isInitialized]);
+        fabricCanvas.setBackground(activePage.background);
+        fabricCanvas.render();
+    }, [activePage?.background, isInitialized]);
+
+    // Note: Visual zoom is handled by CSS transform on the wrapper div
+    // Fabric.js setZoom would cause double-scaling, so we don't use it
+    // The canvas operates in logical coordinates (page width/height)
+    // useEffect(() => {
+    //     if (!isInitialized) return;
+    //     const fabricCanvas = getFabricCanvas();
+    //     fabricCanvas.setZoom(zoom);
+    // }, [zoom, isInitialized]);
 
     // Calculate displayed canvas dimensions
     const displayScale = zoom / 100;
@@ -138,7 +278,7 @@ export function CanvasStage({ className }: CanvasStageProps) {
                 }}
             >
                 <div
-                    className="shadow-2xl flex-shrink-0"
+                    className="shadow-2xl flex-shrink-0 relative"
                     style={{
                         width: displayWidth,
                         height: displayHeight,
@@ -156,6 +296,15 @@ export function CanvasStage({ className }: CanvasStageProps) {
                     >
                         <canvas ref={canvasRef} />
                     </div>
+
+                    {/* Crop Overlay */}
+                    <CropOverlay
+                        zoom={zoom}
+                        containerOffset={{ x: 0, y: 0 }}
+                    />
+
+                    {/* Lock Icon Overlays for locked elements */}
+                    <LockIconOverlay displayScale={displayScale} />
                 </div>
             </div>
         </div>

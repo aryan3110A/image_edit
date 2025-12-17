@@ -4,7 +4,7 @@
 export { useEditorStore, useActivePage, usePages, useZoom, useSidebarPanel } from './editorStore';
 export type { EditorStore, SidebarPanel, ToolMode } from './editorStore';
 
-export { useCanvasStore, useSelectedElements, useIsSelected } from './canvasStore';
+export { useCanvasStore, useSelectedIds, useIsSelected } from './canvasStore';
 export type { CanvasStore } from './canvasStore';
 
 export { useHistoryStore, useHistoryShortcuts } from './historyStore';

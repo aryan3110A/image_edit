@@ -68,6 +68,7 @@ export function ResizeModal() {
     const [height, setHeight] = useState(1080);
     const [aspectLocked, setAspectLocked] = useState(false);
     const [aspectRatio, setAspectRatio] = useState(1920 / 1080);
+    const [scaleContent, setScaleContent] = useState(true);
     const [selectedPreset, setSelectedPreset] = useState<string | null>('Desktop Wallpaper');
 
     // Initialize with current page dimensions
@@ -107,8 +108,52 @@ export function ResizeModal() {
 
     const handleApply = () => {
         if (project && width > 0 && height > 0) {
-            updatePage(project.activePageId, { width, height });
+            const activePage = project.pages.find(p => p.id === project.activePageId);
+            let updatedElements = undefined;
+
+            if (scaleContent && activePage && activePage.elements.length > 0) {
+                const oldWidth = activePage.width;
+                const oldHeight = activePage.height;
+
+                // Calculate scale factor to fit
+                const scaleX = width / oldWidth;
+                const scaleY = height / oldHeight;
+                // Use minimum scale to preserve aspect ratio of the content layout
+                const scale = Math.min(scaleX, scaleY);
+
+                // Calculate offset to center the scaled content
+                const offsetX = (width - oldWidth * scale) / 2;
+                const offsetY = (height - oldHeight * scale) / 2;
+
+                updatedElements = activePage.elements.map(el => {
+                    const newTransform = { ...el.transform };
+
+                    // Scale position
+                    // Assuming centered origin for rotation, but global position is usually topleft/center depending on logic
+                    // If stored as center:
+                    newTransform.x = el.transform.x * scale + offsetX;
+                    newTransform.y = el.transform.y * scale + offsetY;
+
+                    // Scale dimensions
+                    newTransform.scaleX = el.transform.scaleX * scale;
+                    newTransform.scaleY = el.transform.scaleY * scale;
+
+                    return {
+                        ...el,
+                        transform: newTransform,
+                    };
+                });
+            }
+
+            updatePage(project.activePageId, {
+                width,
+                height,
+                ...(updatedElements ? { elements: updatedElements } : {})
+            });
             closeModal();
+
+            // Force re-render of Fabric canvas by briefly updating zoom or similar if needed, 
+            // but updatePage should trigger it via props in CanvasStage
         }
     };
 
@@ -134,12 +179,23 @@ export function ResizeModal() {
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50">
                     <h2 className="text-lg font-semibold text-white">Resize Canvas</h2>
-                    <button
-                        onClick={closeModal}
-                        className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                    >
-                        <X size={20} />
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={scaleContent}
+                                onChange={(e) => setScaleContent(e.target.checked)}
+                                className="w-4 h-4 rounded border-gray-600 text-violet-600 focus:ring-violet-600 bg-[#252528]"
+                            />
+                            <span className="text-sm text-gray-300">Scale content</span>
+                        </label>
+                        <button
+                            onClick={closeModal}
+                            className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content */}
@@ -166,8 +222,8 @@ export function ResizeModal() {
                             <button
                                 onClick={toggleAspectLock}
                                 className={`mt-5 p-2 rounded-lg transition-colors ${aspectLocked
-                                        ? 'bg-violet-500/20 text-violet-400'
-                                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                                    ? 'bg-violet-500/20 text-violet-400'
+                                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
                                     }`}
                                 title={aspectLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
                             >
@@ -205,8 +261,8 @@ export function ResizeModal() {
                                                 key={preset.name}
                                                 onClick={() => handlePresetSelect(preset)}
                                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${isSelected
-                                                        ? 'bg-violet-500/20 border border-violet-500/50 text-white'
-                                                        : 'bg-[#252528] border border-transparent hover:bg-[#2a2a2e] text-gray-300 hover:text-white'
+                                                    ? 'bg-violet-500/20 border border-violet-500/50 text-white'
+                                                    : 'bg-[#252528] border border-transparent hover:bg-[#2a2a2e] text-gray-300 hover:text-white'
                                                     }`}
                                             >
                                                 <span className={`${isSelected ? 'text-violet-400' : 'text-gray-500'}`}>

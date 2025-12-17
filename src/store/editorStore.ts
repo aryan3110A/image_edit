@@ -16,6 +16,8 @@ export type SidebarPanel =
     | 'animations'
     | null;
 
+export type RightPanel = 'properties' | 'colors' | null;
+
 
 export type ToolMode =
     | 'select'
@@ -42,6 +44,9 @@ interface EditorState {
     showGuides: boolean;
     snapToGrid: boolean;
     snapToGuides: boolean;
+
+    // Right panel state
+    activeRightPanel: RightPanel;
 
     // Modal states
     isExportModalOpen: boolean;
@@ -78,6 +83,12 @@ interface EditorActions {
     toggleSnapToGrid: () => void;
     toggleSnapToGuides: () => void;
 
+    // Right panel actions
+    setRightPanel: (panel: RightPanel) => void;
+    openColorsPanel: () => void;
+    openPropertiesPanel: () => void;
+    closeRightPanel: () => void;
+
     // Modal actions
     openExportModal: () => void;
     closeExportModal: () => void;
@@ -110,6 +121,7 @@ export const useEditorStore = create<EditorStore>()(
         showGuides: true,
         snapToGrid: false,
         snapToGuides: true,
+        activeRightPanel: 'properties',
         isExportModalOpen: false,
         isResizeModalOpen: false,
         isNewProjectModalOpen: false,
@@ -320,6 +332,31 @@ export const useEditorStore = create<EditorStore>()(
         toggleSnapToGuides: () => {
             set((state) => {
                 state.snapToGuides = !state.snapToGuides;
+            });
+        },
+
+        // Right panel actions
+        setRightPanel: (panel: RightPanel) => {
+            set((state) => {
+                state.activeRightPanel = panel;
+            });
+        },
+
+        openColorsPanel: () => {
+            set((state) => {
+                state.activeRightPanel = 'colors';
+            });
+        },
+
+        openPropertiesPanel: () => {
+            set((state) => {
+                state.activeRightPanel = 'properties';
+            });
+        },
+
+        closeRightPanel: () => {
+            set((state) => {
+                state.activeRightPanel = null;
             });
         },
 

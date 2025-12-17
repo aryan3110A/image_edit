@@ -9,7 +9,9 @@ import { SidebarContainer } from '@/components/sidebar/SidebarContainer';
 import { TopToolbar } from '@/components/toolbar/TopToolbar';
 import { ContextToolbar } from '@/components/toolbar/ContextToolbar';
 import { ResizeModal } from './ResizeModal';
-import { ChevronRight, ChevronLeft, ChevronUp, ChevronDown, FileText, AlertCircle, MoreHorizontal, Plus } from 'lucide-react';
+import { ColorsPanel } from '@/components/sidebar/ColorsPanel';
+import { ImageEditPanel } from '@/components/sidebar/ImageEditPanel';
+import { ChevronRight, ChevronLeft, ChevronUp, ChevronDown, FileText, AlertCircle, MoreHorizontal, Plus, Copy, ClipboardPaste, CopyPlus, Trash2, EyeOff, Lock } from 'lucide-react';
 
 export function EditorShell() {
     const createNewProject = useEditorStore((state) => state.createNewProject);
@@ -17,9 +19,15 @@ export function EditorShell() {
     const pushState = useHistoryStore((state) => state.pushState);
     const selectedIds = useCanvasStore((state) => state.selectedIds);
 
-    // Panel visibility states
-    const [showProperties, setShowProperties] = useState(true);
+    // Right panel state from store
+    const rightPanel = useEditorStore((state) => state.activeRightPanel);
+    const setRightPanel = useEditorStore((state) => state.setRightPanel);
+
+    // Local panel states
     const [pagesExpanded, setPagesExpanded] = useState(false);
+
+    // Helper to check if right panel is open
+    const showRightPanel = rightPanel !== null;
 
     // Initialize with a new project if none exists
     useEffect(() => {
@@ -90,7 +98,7 @@ export function EditorShell() {
                 <SidebarContainer />
 
                 {/* Canvas Area with Bottom Bar */}
-                <div className="flex-1 flex flex-col relative">
+                <div className="flex-1 flex flex-col relative min-w-0 overflow-hidden">
                     {/* Context Toolbar */}
                     <ContextToolbar />
 
@@ -101,8 +109,8 @@ export function EditorShell() {
                     <div className="relative bg-gradient-to-b from-white to-gray-50 border-t border-gray-200/80">
                         {/* Expanded Pages View */}
                         {pagesExpanded && (
-                            <div className="px-5 py-5 pt-3">
-                                <div className="flex items-center gap-5 overflow-x-auto custom-scrollbar pb-3 pt-2 pl-1">
+                            <div className="px-5 py-5 pt-3 overflow-hidden">
+                                <div className="flex items-center gap-5 overflow-x-auto custom-scrollbar pb-3 pt-2 pl-1" style={{ maxWidth: '100%' }}>
                                     {project.pages.map((page, index) => (
                                         <div key={page.id} className="relative flex-shrink-0 group">
                                             <button
@@ -150,13 +158,87 @@ export function EditorShell() {
                         )}
 
                         {/* Collapsed Bar */}
-                        <div className="h-10 flex items-center justify-center px-4">
+                        <div className="h-10 flex items-center justify-between px-4">
+                            {/* Left spacer for balance */}
+                            <div className="w-[180px]" />
+
                             {/* Center - Pages Count */}
                             <div className="flex items-center gap-1.5 text-sm tracking-wide">
                                 <span className="text-gray-600 font-semibold">Pages</span>
                                 <span className="text-gray-800 font-bold">{project.pages.findIndex(p => p.id === project.activePageId) + 1}</span>
                                 <span className="text-gray-400">/</span>
                                 <span className="text-gray-800 font-bold">{project.pages.length}</span>
+                            </div>
+
+                            {/* Right - Page Actions */}
+                            <div className="flex items-center gap-1 w-[180px] justify-end">
+                                {/* Copy Page Content */}
+                                <button
+                                    onClick={() => useCanvasStore.getState().copy()}
+                                    className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+                                    title="Copy page content"
+                                >
+                                    <Copy size={15} />
+                                </button>
+
+                                {/* Paste */}
+                                <button
+                                    onClick={() => useCanvasStore.getState().paste()}
+                                    className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+                                    title="Paste"
+                                >
+                                    <ClipboardPaste size={15} />
+                                </button>
+
+                                {/* Divider */}
+                                <div className="w-px h-4 bg-gray-200 mx-1" />
+
+                                {/* Duplicate Page */}
+                                <button
+                                    onClick={() => useEditorStore.getState().duplicatePage(project.activePageId)}
+                                    className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+                                    title="Duplicate page"
+                                >
+                                    <CopyPlus size={15} />
+                                </button>
+
+                                {/* Delete Page */}
+                                <button
+                                    onClick={() => {
+                                        if (project.pages.length > 1) {
+                                            useEditorStore.getState().removePage(project.activePageId);
+                                        }
+                                    }}
+                                    className={`p-1.5 rounded-md transition-colors ${project.pages.length > 1
+                                        ? 'hover:bg-red-50 text-gray-500 hover:text-red-500'
+                                        : 'text-gray-300 cursor-not-allowed'
+                                        }`}
+                                    title={project.pages.length > 1 ? "Delete page" : "Cannot delete the only page"}
+                                    disabled={project.pages.length <= 1}
+                                >
+                                    <Trash2 size={15} />
+                                </button>
+
+                                {/* Divider */}
+                                <div className="w-px h-4 bg-gray-200 mx-1" />
+
+                                {/* Hide Page */}
+                                <button
+                                    onClick={() => {/* TODO: Implement hide page */ }}
+                                    className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+                                    title="Hide page (coming soon)"
+                                >
+                                    <EyeOff size={15} />
+                                </button>
+
+                                {/* Lock Page */}
+                                <button
+                                    onClick={() => {/* TODO: Implement lock page */ }}
+                                    className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+                                    title="Lock page (coming soon)"
+                                >
+                                    <Lock size={15} />
+                                </button>
                             </div>
 
                             {/* Center - Toggle Button with trapezoid tab */}
@@ -197,24 +279,26 @@ export function EditorShell() {
                     </div>
                 </div>
 
-                {/* Right Panel (Properties) - Collapsible */}
-                {showProperties && (
+                {/* Right Panel - Dynamic Content */}
+                {showRightPanel && (
                     <div className="relative">
-                        <div className="w-64 bg-white border-l border-gray-200 p-4 h-full">
-                            <h3 className="text-gray-800 text-sm font-medium mb-4">Properties</h3>
-                            <div className="text-gray-500 text-xs">
-                                Select an element to see its properties
-                            </div>
-                        </div>
+                        {/* Render panel based on type and selection */}
+                        {rightPanel === 'colors' ? (
+                            <ColorsPanel
+                                onClose={() => setRightPanel(null)}
+                            />
+                        ) : (
+                            <ImageEditPanel />
+                        )}
 
-                        {/* Properties Panel Close Button - Trapezoid shape */}
+                        {/* Panel Close Button - Trapezoid shape */}
                         <button
-                            onClick={() => setShowProperties(false)}
+                            onClick={() => setRightPanel(null)}
                             className="absolute top-1/2 -translate-y-1/2 left-0 -translate-x-full z-40 
                                        flex items-center justify-center
                                        transition-all duration-200
                                        hover:opacity-80 active:scale-95"
-                            title="Close properties"
+                            title="Close panel"
                         >
                             <svg
                                 width="24"
@@ -240,15 +324,15 @@ export function EditorShell() {
                 )}
             </div>
 
-            {/* Toggle button when properties panel is closed */}
-            {!showProperties && (
+            {/* Toggle button when right panel is closed */}
+            {!showRightPanel && (
                 <button
-                    onClick={() => setShowProperties(true)}
+                    onClick={() => setRightPanel('properties')}
                     className="fixed right-0 top-1/2 -translate-y-1/2 z-50
                                flex items-center justify-center
                                transition-all duration-200
                                hover:opacity-80 active:scale-95"
-                    title="Show properties"
+                    title="Show panel"
                 >
                     <svg
                         width="24"

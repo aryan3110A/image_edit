@@ -77,11 +77,16 @@ export function TopToolbar() {
         if (project) {
             const activePage = project.pages.find(p => p.id === project.activePageId);
             if (activePage) {
-                setWidth(activePage.width);
-                setHeight(activePage.height);
+                // Only update if values actually differ to prevent infinite loops
+                if (activePage.width !== width) {
+                    setWidth(activePage.width);
+                }
+                if (activePage.height !== height) {
+                    setHeight(activePage.height);
+                }
             }
         }
-    }, [project]);
+    }, [project?.activePageId, project?.pages]);
 
     // Close dropdown when clicking outside
     useEffect(() => {

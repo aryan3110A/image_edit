@@ -34,6 +34,7 @@ export interface GradientBackground {
     gradientType: 'linear' | 'radial';
     colorStops: Array<{ offset: number; color: string }>;
     angle?: number;
+    radialPosition?: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 }
 
 export interface ImageBackground {

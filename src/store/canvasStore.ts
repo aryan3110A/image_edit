@@ -3,6 +3,7 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { fabric } from 'fabric';
 import {
     CanvasElement,
     TextElement,
@@ -14,9 +15,18 @@ import {
     createDefaultImageFilter,
     Transform,
     Style,
+    CropData,
 } from '@/types/canvas';
 import { useEditorStore } from './editorStore';
 import { useHistoryStore } from './historyStore';
+import { getFabricCanvas } from '@/engine/fabric/FabricCanvas';
+
+interface CropBounds {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
 
 interface CanvasState {
     // Selection state
@@ -33,6 +43,11 @@ interface CanvasState {
 
     // Transform state for active operations
     activeTransform: Partial<Transform> | null;
+
+    // Crop mode state
+    cropMode: boolean;
+    cropBounds: CropBounds | null;
+    cropElementId: string | null;
 }
 
 interface CanvasActions {
@@ -81,6 +96,12 @@ interface CanvasActions {
     setRotating: (isRotating: boolean) => void;
     setActiveTransform: (transform: Partial<Transform> | null) => void;
 
+    // Crop mode actions
+    setCropMode: (enabled: boolean, elementId?: string) => void;
+    setCropBounds: (bounds: CropBounds) => void;
+    applyCrop: () => void;
+    cancelCrop: () => void;
+
     // Utility
     getSelectedElements: () => CanvasElement[];
     getElement: (id: string) => CanvasElement | undefined;
@@ -128,6 +149,11 @@ export const useCanvasStore = create<CanvasStore>()(
         isDragging: false,
         isResizing: false,
         isRotating: false,
+
+        // Crop mode state
+        cropMode: false,
+        cropBounds: null,
+        cropElementId: null,
         activeTransform: null,
 
         // Selection actions
@@ -177,6 +203,10 @@ export const useCanvasStore = create<CanvasStore>()(
             editorStore.updatePage(editorStore.project.activePageId, {
                 elements: [...getActivePageElements(), element],
             });
+
+            // Add element to Fabric.js canvas
+            const fabricCanvas = getFabricCanvas();
+            fabricCanvas.addElement(element);
 
             set((state) => {
                 state.selectedIds = [element.id];
@@ -273,7 +303,7 @@ export const useCanvasStore = create<CanvasStore>()(
 
             const elements = getActivePageElements();
             const updatedElements = elements.map(el =>
-                el.id === id ? { ...el, ...updates } : el
+                el.id === id ? { ...el, ...updates } as CanvasElement : el
             );
 
             editorStore.updatePage(editorStore.project.activePageId, {
@@ -288,6 +318,12 @@ export const useCanvasStore = create<CanvasStore>()(
 
             const elements = getActivePageElements();
             const updatedElements = elements.filter(el => !ids.includes(el.id));
+
+            // Remove objects from Fabric.js canvas
+            const fabricCanvas = getFabricCanvas();
+            ids.forEach(elementId => {
+                fabricCanvas.removeObject(elementId);
+            });
 
             editorStore.updatePage(editorStore.project.activePageId, {
                 elements: updatedElements,
@@ -330,9 +366,18 @@ export const useCanvasStore = create<CanvasStore>()(
                 });
             }
 
+            // Sync to Fabric.js canvas
+            const fabricCanvas = getFabricCanvas();
+            newElements.forEach(el => {
+                fabricCanvas.addElement(el as CanvasElement);
+            });
+
             set((state) => {
                 state.selectedIds = duplicatedIds;
             });
+
+            // Select the duplicated elements on canvas
+            fabricCanvas.selectObjects(duplicatedIds);
 
             pushHistory(`Duplicate ${duplicatedIds.length} element(s)`);
 
@@ -347,6 +392,10 @@ export const useCanvasStore = create<CanvasStore>()(
                 get().updateElement(id, {
                     transform: { ...element.transform, ...transform },
                 });
+
+                // Sync to Fabric.js canvas
+                const fabricCanvas = getFabricCanvas();
+                fabricCanvas.updateElementTransform(id, transform);
             }
         },
 
@@ -357,6 +406,10 @@ export const useCanvasStore = create<CanvasStore>()(
                 get().updateElement(id, {
                     style: { ...element.style, ...style },
                 });
+
+                // Sync to Fabric.js canvas
+                const fabricCanvas = getFabricCanvas();
+                fabricCanvas.updateElementStyle(id, style as any);
             }
         },
 
@@ -365,12 +418,30 @@ export const useCanvasStore = create<CanvasStore>()(
             const elements = getActivePageElements();
             const maxZIndex = Math.max(...elements.map(e => e.zIndex));
             get().updateElement(id, { zIndex: maxZIndex + 1 });
+
+            // Sync with Fabric.js canvas
+            const fabricCanvas = getFabricCanvas();
+            const obj = fabricCanvas.getObjectById(id);
+            const canvas = fabricCanvas.getCanvas();
+            if (obj && canvas) {
+                canvas.bringToFront(obj);
+                canvas.renderAll();
+            }
         },
 
         sendToBack: (id: string) => {
             const elements = getActivePageElements();
             const minZIndex = Math.min(...elements.map(e => e.zIndex));
             get().updateElement(id, { zIndex: minZIndex - 1 });
+
+            // Sync with Fabric.js canvas
+            const fabricCanvas = getFabricCanvas();
+            const obj = fabricCanvas.getObjectById(id);
+            const canvas = fabricCanvas.getCanvas();
+            if (obj && canvas) {
+                canvas.sendToBack(obj);
+                canvas.renderAll();
+            }
         },
 
         bringForward: (id: string) => {
@@ -378,6 +449,15 @@ export const useCanvasStore = create<CanvasStore>()(
             const element = elements.find(e => e.id === id);
             if (element) {
                 get().updateElement(id, { zIndex: element.zIndex + 1 });
+
+                // Sync with Fabric.js canvas
+                const fabricCanvas = getFabricCanvas();
+                const obj = fabricCanvas.getObjectById(id);
+                const canvas = fabricCanvas.getCanvas();
+                if (obj && canvas) {
+                    canvas.bringForward(obj);
+                    canvas.renderAll();
+                }
             }
         },
 
@@ -386,6 +466,15 @@ export const useCanvasStore = create<CanvasStore>()(
             const element = elements.find(e => e.id === id);
             if (element) {
                 get().updateElement(id, { zIndex: element.zIndex - 1 });
+
+                // Sync with Fabric.js canvas
+                const fabricCanvas = getFabricCanvas();
+                const obj = fabricCanvas.getObjectById(id);
+                const canvas = fabricCanvas.getCanvas();
+                if (obj && canvas) {
+                    canvas.sendBackwards(obj);
+                    canvas.renderAll();
+                }
             }
         },
 
@@ -404,6 +493,27 @@ export const useCanvasStore = create<CanvasStore>()(
         // Layer operations
         lockElement: (id: string) => {
             get().updateElement(id, { locked: true, selectable: false });
+
+            // Sync to Fabric.js canvas
+            const fabricCanvas = getFabricCanvas();
+            const obj = fabricCanvas.getObjectById(id);
+            const canvas = fabricCanvas.getCanvas();
+            if (obj && canvas) {
+                obj.set({
+                    selectable: false,
+                    evented: false,
+                    hasControls: false,
+                    hasBorders: false,
+                    lockMovementX: true,
+                    lockMovementY: true,
+                    lockRotation: true,
+                    lockScalingX: true,
+                    lockScalingY: true,
+                });
+                canvas.discardActiveObject();
+                canvas.renderAll();
+            }
+
             set((state) => {
                 state.selectedIds = state.selectedIds.filter(i => i !== id);
             });
@@ -411,6 +521,25 @@ export const useCanvasStore = create<CanvasStore>()(
 
         unlockElement: (id: string) => {
             get().updateElement(id, { locked: false, selectable: true });
+
+            // Sync to Fabric.js canvas
+            const fabricCanvas = getFabricCanvas();
+            const obj = fabricCanvas.getObjectById(id);
+            const canvas = fabricCanvas.getCanvas();
+            if (obj && canvas) {
+                obj.set({
+                    selectable: true,
+                    evented: true,
+                    hasControls: true,
+                    hasBorders: true,
+                    lockMovementX: false,
+                    lockMovementY: false,
+                    lockRotation: false,
+                    lockScalingX: false,
+                    lockScalingY: false,
+                });
+                canvas.renderAll();
+            }
         },
 
         toggleVisibility: (id: string) => {
@@ -469,9 +598,18 @@ export const useCanvasStore = create<CanvasStore>()(
                 });
             }
 
+            // Sync to Fabric.js canvas
+            const fabricCanvas = getFabricCanvas();
+            pastedElements.forEach(el => {
+                fabricCanvas.addElement(el as CanvasElement);
+            });
+
             set((state) => {
                 state.selectedIds = pastedIds;
             });
+
+            // Select the pasted elements on canvas
+            fabricCanvas.selectObjects(pastedIds);
         },
 
         // Drag state
@@ -513,6 +651,161 @@ export const useCanvasStore = create<CanvasStore>()(
 
         getElements: () => {
             return getActivePageElements();
+        },
+
+        // Crop mode actions
+        setCropMode: (enabled: boolean, elementId?: string) => {
+            if (enabled && elementId) {
+                const element = get().getElement(elementId);
+                if (element && element.type === 'image') {
+                    // Initialize crop bounds to element's current bounds
+                    const width = element.transform.width * Math.abs(element.transform.scaleX);
+                    const height = element.transform.height * Math.abs(element.transform.scaleY);
+                    set((state) => {
+                        state.cropMode = true;
+                        state.cropElementId = elementId;
+                        state.cropBounds = {
+                            x: element.transform.x - width / 2,
+                            y: element.transform.y - height / 2,
+                            width: width,
+                            height: height,
+                        };
+                    });
+                }
+            } else {
+                set((state) => {
+                    state.cropMode = false;
+                    state.cropBounds = null;
+                    state.cropElementId = null;
+                });
+            }
+        },
+
+        setCropBounds: (bounds) => {
+            set((state) => {
+                state.cropBounds = bounds;
+            });
+        },
+
+        applyCrop: () => {
+            const { cropBounds, cropElementId } = get();
+            if (!cropBounds || !cropElementId) return;
+
+            const element = get().getElement(cropElementId);
+            if (!element || element.type !== 'image') return;
+
+            const imageElement = element as ImageElement;
+            const fabricCanvas = getFabricCanvas();
+            const fabricObj = fabricCanvas.getObjectById(cropElementId) as fabric.Image | undefined;
+
+            if (!fabricObj) return;
+
+            // Get the underlying image element
+            const imgElement = fabricCanvas.getImageElement(cropElementId);
+            if (!imgElement) return;
+
+            // Get the fabric object's current state
+            const imgLeft = fabricObj.left || 0;
+            const imgTop = fabricObj.top || 0;
+            const imgScaleX = Math.abs(fabricObj.scaleX || 1);
+            const imgScaleY = Math.abs(fabricObj.scaleY || 1);
+            const imgWidth = fabricObj.width || 0;
+            const imgHeight = fabricObj.height || 0;
+
+            // Image actual bounds (accounting for center origin)
+            const imgActualLeft = imgLeft - (imgWidth * imgScaleX) / 2;
+            const imgActualTop = imgTop - (imgHeight * imgScaleY) / 2;
+
+            // Calculate crop rectangle in image-local coordinates (unscaled, in original image pixels)
+            const cropX = (cropBounds.x - imgActualLeft) / imgScaleX;
+            const cropY = (cropBounds.y - imgActualTop) / imgScaleY;
+            const cropWidth = cropBounds.width / imgScaleX;
+            const cropHeight = cropBounds.height / imgScaleY;
+
+            // Create a temporary canvas to crop the image
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cropWidth;
+            tempCanvas.height = cropHeight;
+            const ctx = tempCanvas.getContext('2d');
+
+            if (!ctx) return;
+
+            // Draw the cropped portion of the original image
+            ctx.drawImage(
+                imgElement,
+                cropX, cropY, cropWidth, cropHeight,  // Source rectangle
+                0, 0, cropWidth, cropHeight  // Destination rectangle
+            );
+
+            // Get the cropped image as data URL
+            const croppedDataUrl = tempCanvas.toDataURL('image/png');
+
+            // Calculate new position (center of crop box)
+            const newCenterX = cropBounds.x + cropBounds.width / 2;
+            const newCenterY = cropBounds.y + cropBounds.height / 2;
+
+            // Remove the old image from fabric canvas
+            const canvas = fabricCanvas.getCanvas();
+            if (canvas) {
+                canvas.remove(fabricObj);
+            }
+
+            // Create new fabric image from cropped data
+            fabric.Image.fromURL(croppedDataUrl, (croppedImg) => {
+                if (!canvas) return;
+
+                croppedImg.set({
+                    left: newCenterX,
+                    top: newCenterY,
+                    scaleX: imgScaleX * (fabricObj.scaleX! >= 0 ? 1 : -1),
+                    scaleY: imgScaleY * (fabricObj.scaleY! >= 0 ? 1 : -1),
+                    angle: fabricObj.angle || 0,
+                    originX: 'center',
+                    originY: 'center',
+                    opacity: fabricObj.opacity,
+                    selectable: true,
+                    data: { id: cropElementId, type: 'image' },
+                });
+
+                canvas.add(croppedImg);
+                canvas.setActiveObject(croppedImg);
+                canvas.renderAll();
+
+                // Update the object ID map
+                fabricCanvas.setObjectById(cropElementId, croppedImg);
+
+                // Update element in store
+                get().updateElement(cropElementId, {
+                    src: croppedDataUrl,
+                    transform: {
+                        ...imageElement.transform,
+                        x: newCenterX,
+                        y: newCenterY,
+                        width: cropWidth,
+                        height: cropHeight,
+                        scaleX: imgScaleX * (imageElement.transform.scaleX >= 0 ? 1 : -1),
+                        scaleY: imgScaleY * (imageElement.transform.scaleY >= 0 ? 1 : -1),
+                    },
+                    crop: null, // Clear crop data since we've actually cropped
+                });
+
+                pushHistory('Crop image');
+            }, { crossOrigin: 'anonymous' });
+
+            // Exit crop mode
+            set((state) => {
+                state.cropMode = false;
+                state.cropBounds = null;
+                state.cropElementId = null;
+            });
+        },
+
+        cancelCrop: () => {
+            set((state) => {
+                state.cropMode = false;
+                state.cropBounds = null;
+                state.cropElementId = null;
+            });
         },
     }))
 );

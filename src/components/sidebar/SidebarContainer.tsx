@@ -16,6 +16,7 @@ import { TemplatesPanel } from './TemplatesPanel';
 import { ElementsPanel } from './ElementsPanel';
 import { TextPanel } from './TextPanel';
 import { UploadPanel } from './UploadPanel';
+import { PhotosPanel } from './PhotosPanel';
 import { LayersPanel } from './LayersPanel';
 import { AnimationsPanel } from './AnimationsPanel';
 
@@ -55,7 +56,7 @@ export function SidebarContainer() {
             case 'text':
                 return <TextPanel />;
             case 'photos':
-                return <UploadPanel />;
+                return <PhotosPanel />;
             case 'uploads':
                 return <UploadPanel />;
             case 'layers':
