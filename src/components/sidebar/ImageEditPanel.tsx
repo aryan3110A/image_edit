@@ -5,6 +5,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { useEditorStore, useActivePage } from '@/store/editorStore';
 import { getFabricCanvas } from '@/engine/fabric/FabricCanvas';
 import { ImageBackground, SolidBackground } from '@/types/project';
+import { ImageElement } from '@/types/canvas';
 import {
     AlignHorizontalJustifyCenter,
     AlignHorizontalJustifyStart,
@@ -26,6 +27,7 @@ import {
 export function ImageEditPanel() {
     const selectedIds = useCanvasStore((state) => state.selectedIds);
     const updateTransform = useCanvasStore((state) => state.updateTransform);
+    const updateElement = useCanvasStore((state) => state.updateElement);
     const setCropMode = useCanvasStore((state) => state.setCropMode);
     const removeElement = useCanvasStore((state) => state.removeElement);
     const addImageElement = useCanvasStore((state) => state.addImageElement);
@@ -130,30 +132,98 @@ export function ImageEditPanel() {
         if (!selectedElement || !activePage) return;
         if (selectedElement.type !== 'image') return;
 
-        // Get the image source from the element
-        const imageElement = selectedElement as { src: string };
-        const imageSrc = imageElement.src;
+        const imageElement = selectedElement as ImageElement;
 
-        // Create the image background with cover fit (like CSS background-size: cover)
-        const newBackground: ImageBackground = {
-            type: 'image',
-            src: imageSrc,
-            fit: 'cover',  // This ensures the image covers the canvas while maintaining aspect ratio
-            opacity: 1,
+        // Save original transform before modifying (only if not already a background)
+        if (!imageElement.isBackground) {
+            updateElement(selectedElement.id, {
+                isBackground: true,
+                originalTransform: { ...imageElement.transform },
+            });
+        }
+
+        // Load actual image dimensions from source
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            const naturalWidth = img.naturalWidth || img.width;
+            const naturalHeight = img.naturalHeight || img.height;
+
+            // Calculate scale to cover entire canvas (cover mode - no blank space)
+            const scaleX = canvasWidth / naturalWidth;
+            const scaleY = canvasHeight / naturalHeight;
+            const scale = Math.max(scaleX, scaleY); // Use max for cover (fills canvas, may crop)
+
+            const sendToBack = useCanvasStore.getState().sendToBack;
+
+            // Update the transform with actual dimensions
+            updateTransform(selectedElement.id, {
+                x: canvasWidth / 2,
+                y: canvasHeight / 2,
+                width: naturalWidth,
+                height: naturalHeight,
+                scaleX: scale,
+                scaleY: scale,
+                rotation: 0,
+            });
+
+            // Send to the very back
+            sendToBack(selectedElement.id);
+
+            // Disable movement on canvas (but don't set locked:true in store)
+            const fabricCanvas = getFabricCanvas();
+            const fabricObj = fabricCanvas.getObjectById(selectedElement.id);
+            if (fabricObj) {
+                fabricObj.set({
+                    lockMovementX: true,
+                    lockMovementY: true,
+                    lockRotation: true,
+                    lockScalingX: true,
+                    lockScalingY: true,
+                });
+                fabricCanvas.getCanvas()?.renderAll();
+            }
         };
+        img.src = imageElement.src;
+    };
 
-        // Update the page background
-        updatePage(activePage.id, {
-            background: newBackground,
+    // Remove from Background handler - restores image to original size
+    const handleRemoveFromBackground = () => {
+        if (!selectedElement || selectedElement.type !== 'image') return;
+
+        const imageElement = selectedElement as ImageElement;
+        if (!imageElement.isBackground || !imageElement.originalTransform) return;
+
+        const originalTransform = imageElement.originalTransform;
+
+        // Restore original transform
+        updateTransform(selectedElement.id, {
+            x: originalTransform.x,
+            y: originalTransform.y,
+            scaleX: originalTransform.scaleX,
+            scaleY: originalTransform.scaleY,
+            rotation: originalTransform.rotation,
         });
 
-        // Remove the original image element from the canvas
-        removeElement(selectedElement.id);
+        // Clear background flag
+        updateElement(selectedElement.id, {
+            isBackground: false,
+            originalTransform: undefined,
+        });
 
-        // Update the Fabric.js canvas to reflect the new background
+        // Unlock movement on canvas
         const fabricCanvas = getFabricCanvas();
-        fabricCanvas.setBackground(newBackground);
-        fabricCanvas.render();
+        const fabricObj = fabricCanvas.getObjectById(selectedElement.id);
+        if (fabricObj) {
+            fabricObj.set({
+                lockMovementX: false,
+                lockMovementY: false,
+                lockRotation: false,
+                lockScalingX: false,
+                lockScalingY: false,
+            });
+            fabricCanvas.getCanvas()?.renderAll();
+        }
     };
 
     // Remove Background handler
@@ -216,9 +286,18 @@ export function ImageEditPanel() {
 
     const isBackgroundMode = !selectedElement && activePage?.background.type === 'image';
     const isDisabled = !selectedElement && !isBackgroundMode;
-    const isCropDisabled = !selectedElement || selectedElement.type !== 'image';
-    const isSetBgDisabled = !selectedElement || selectedElement.type !== 'image';
-    const isRemoveBgDisabled = !activePage || activePage.background.type !== 'image';
+
+    // Check if selected image is set as background
+    const isImageBackground = selectedElement?.type === 'image' && (selectedElement as ImageElement).isBackground;
+
+    // When image is background, disable all controls except Remove BG
+    const isBackgroundLocked = isImageBackground === true;
+    const isCropDisabled = !selectedElement || selectedElement.type !== 'image' || isBackgroundLocked;
+    const isSetBgDisabled = !selectedElement || selectedElement.type !== 'image' || isBackgroundLocked;
+    const isFlipDisabled = !selectedElement || isBackgroundLocked;
+    const isAlignDisabled = !selectedElement || isBackgroundLocked;
+    const isLayerDisabled = !selectedElement || isBackgroundLocked;
+    const isRemoveBgDisabled = !isImageBackground;
 
     return (
         <div className="w-64 h-full flex flex-col bg-white border-l border-gray-200">
@@ -237,9 +316,9 @@ export function ImageEditPanel() {
                     <div className="grid grid-cols-6 gap-1">
                         <button
                             onClick={handleAlignLeft}
-                            disabled={!selectedElement}
+                            disabled={isAlignDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isAlignDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Align Left"
@@ -250,9 +329,9 @@ export function ImageEditPanel() {
 
                         <button
                             onClick={handleAlignCenter}
-                            disabled={!selectedElement}
+                            disabled={isAlignDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isAlignDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Align Center"
@@ -263,9 +342,9 @@ export function ImageEditPanel() {
 
                         <button
                             onClick={handleAlignRight}
-                            disabled={!selectedElement}
+                            disabled={isAlignDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isAlignDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Align Right"
@@ -276,9 +355,9 @@ export function ImageEditPanel() {
 
                         <button
                             onClick={handleAlignTop}
-                            disabled={!selectedElement}
+                            disabled={isAlignDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isAlignDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Align Top"
@@ -289,9 +368,9 @@ export function ImageEditPanel() {
 
                         <button
                             onClick={handleAlignMiddle}
-                            disabled={!selectedElement}
+                            disabled={isAlignDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isAlignDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Align Middle"
@@ -302,9 +381,9 @@ export function ImageEditPanel() {
 
                         <button
                             onClick={handleAlignBottom}
-                            disabled={!selectedElement}
+                            disabled={isAlignDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isAlignDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Align Bottom"
@@ -323,9 +402,9 @@ export function ImageEditPanel() {
                     <div className="grid grid-cols-4 gap-1">
                         <button
                             onClick={() => selectedElement && bringForward(selectedElement.id)}
-                            disabled={!selectedElement}
+                            disabled={isLayerDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isLayerDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Bring Forward"
@@ -336,9 +415,9 @@ export function ImageEditPanel() {
 
                         <button
                             onClick={() => selectedElement && sendBackward(selectedElement.id)}
-                            disabled={!selectedElement}
+                            disabled={isLayerDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isLayerDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Send Backward"
@@ -349,9 +428,9 @@ export function ImageEditPanel() {
 
                         <button
                             onClick={() => selectedElement && bringToFront(selectedElement.id)}
-                            disabled={!selectedElement}
+                            disabled={isLayerDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isLayerDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Bring to Front"
@@ -362,9 +441,9 @@ export function ImageEditPanel() {
 
                         <button
                             onClick={() => selectedElement && sendToBack(selectedElement.id)}
-                            disabled={!selectedElement}
+                            disabled={isLayerDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isLayerDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Send to Back"
@@ -383,9 +462,9 @@ export function ImageEditPanel() {
                     <div className="grid grid-cols-4 gap-1">
                         <button
                             onClick={handleFlipHorizontal}
-                            disabled={!selectedElement}
+                            disabled={isFlipDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isFlipDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Flip Horizontal"
@@ -396,9 +475,9 @@ export function ImageEditPanel() {
 
                         <button
                             onClick={handleFlipVertical}
-                            disabled={!selectedElement}
+                            disabled={isFlipDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
-                                ${selectedElement
+                                ${!isFlipDisabled
                                     ? 'hover:bg-blue-50 text-gray-500 hover:text-blue-600 active:bg-blue-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
                             title="Flip Vertical"
@@ -442,13 +521,13 @@ export function ImageEditPanel() {
                         </button>
 
                         <button
-                            onClick={handleRemoveBackground}
+                            onClick={handleRemoveFromBackground}
                             disabled={isRemoveBgDisabled}
                             className={`flex flex-col items-center text-center justify-center py-2 px-0 rounded-lg transition-all
                                 ${!isRemoveBgDisabled
                                     ? 'hover:bg-red-50 text-gray-500 hover:text-red-600 active:bg-red-100'
                                     : 'text-gray-300 cursor-not-allowed'}`}
-                            title="Remove Background"
+                            title="Remove from Background (restore original size)"
                         >
                             <ImageOff size={16} />
                             <span className="text-[9px] mt-1 font-medium leading-none">Remove BG</span>
@@ -480,7 +559,7 @@ export function ImageEditPanel() {
                                         });
                                     }
                                 }}
-                                disabled={isDisabled || isBackgroundMode}
+                                disabled={isDisabled || isBackgroundMode || isBackgroundLocked}
                                 className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-700 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                         </div>
@@ -505,7 +584,7 @@ export function ImageEditPanel() {
                                         });
                                     }
                                 }}
-                                disabled={isDisabled || isBackgroundMode}
+                                disabled={isDisabled || isBackgroundMode || isBackgroundLocked}
                                 className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-700 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                         </div>
@@ -524,7 +603,7 @@ export function ImageEditPanel() {
                                         rotation: val
                                     });
                                 }}
-                                disabled={isDisabled || isBackgroundMode}
+                                disabled={isDisabled || isBackgroundMode || isBackgroundLocked}
                                 className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-700 focus:outline-none focus:border-blue-500 transition-colors"
                             />
                         </div>
@@ -546,7 +625,7 @@ export function ImageEditPanel() {
                                     if (!selectedElement || isNaN(val)) return;
                                     updateTransform(selectedElement.id, { x: val });
                                 }}
-                                disabled={isDisabled || isBackgroundMode}
+                                disabled={isDisabled || isBackgroundMode || isBackgroundLocked}
                                 className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-700 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                         </div>
@@ -562,7 +641,7 @@ export function ImageEditPanel() {
                                     if (!selectedElement || isNaN(val)) return;
                                     updateTransform(selectedElement.id, { y: val });
                                 }}
-                                disabled={isDisabled || isBackgroundMode}
+                                disabled={isDisabled || isBackgroundMode || isBackgroundLocked}
                                 className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs text-gray-700 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                         </div>

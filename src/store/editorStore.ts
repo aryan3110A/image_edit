@@ -16,7 +16,7 @@ export type SidebarPanel =
     | 'animations'
     | null;
 
-export type RightPanel = 'properties' | 'colors' | null;
+export type RightPanel = 'properties' | 'colors' | 'filters' | null;
 
 
 export type ToolMode =
@@ -87,6 +87,7 @@ interface EditorActions {
     setRightPanel: (panel: RightPanel) => void;
     openColorsPanel: () => void;
     openPropertiesPanel: () => void;
+    openFiltersPanel: () => void;
     closeRightPanel: () => void;
 
     // Modal actions
@@ -351,6 +352,12 @@ export const useEditorStore = create<EditorStore>()(
         openPropertiesPanel: () => {
             set((state) => {
                 state.activeRightPanel = 'properties';
+            });
+        },
+
+        openFiltersPanel: () => {
+            set((state) => {
+                state.activeRightPanel = 'filters';
             });
         },
 

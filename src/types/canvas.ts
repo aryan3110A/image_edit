@@ -102,9 +102,18 @@ export interface ImageFilter {
     blur: number; // 0 to 100
     temperature: number; // -100 to 100
     tint: number; // -100 to 100
+    highlights: number; // -100 to 100
+    shadows: number; // -100 to 100
+    whites: number; // -100 to 100
+    blacks: number; // -100 to 100
+    vibrance: number; // -100 to 100
+    clarity: number; // -100 to 100
+    sharpness: number; // 0 to 100
+    vignette: number; // -100 to 100
     grayscale: boolean;
     sepia: boolean;
     invert: boolean;
+    filterPreset: string | null; // e.g., 'fresco', 'bali', 'nordic', etc.
 }
 
 export interface CropData {
@@ -114,13 +123,26 @@ export interface CropData {
     height: number;
 }
 
+// Color replacement effect for images (Canva-like color replace)
+export interface ColorReplaceEffect {
+    enabled: boolean;
+    targetColor: string; // Target color to apply (hex format)
+    intensity: number; // 0-100, how strong the effect is
+    preserveBackground: boolean; // Whether to try to preserve background
+    blendMode: 'hue' | 'multiply' | 'screen' | 'overlay'; // How to blend the color
+}
+
 export interface ImageElement extends BaseElement {
     type: 'image';
     src: string;
     originalSrc: string;
     filters: ImageFilter;
     crop: CropData | null;
+    colorReplace: ColorReplaceEffect | null;
     crossOrigin: 'anonymous' | 'use-credentials' | null;
+    // Background mode tracking
+    isBackground?: boolean; // True if image is set as canvas background
+    originalTransform?: Transform; // Original transform before setting as background
 }
 
 // Shape element specific properties
@@ -205,7 +227,16 @@ export const createDefaultImageFilter = (): ImageFilter => ({
     blur: 0,
     temperature: 0,
     tint: 0,
+    highlights: 0,
+    shadows: 0,
+    whites: 0,
+    blacks: 0,
+    vibrance: 0,
+    clarity: 0,
+    sharpness: 0,
+    vignette: 0,
     grayscale: false,
     sepia: false,
     invert: false,
+    filterPreset: null,
 });

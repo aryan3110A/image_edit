@@ -11,6 +11,7 @@ import { ContextToolbar } from '@/components/toolbar/ContextToolbar';
 import { ResizeModal } from './ResizeModal';
 import { ColorsPanel } from '@/components/sidebar/ColorsPanel';
 import { ImageEditPanel } from '@/components/sidebar/ImageEditPanel';
+import { FilterPanel } from '@/components/sidebar/FilterPanel';
 import { ChevronRight, ChevronLeft, ChevronUp, ChevronDown, FileText, AlertCircle, MoreHorizontal, Plus, Copy, ClipboardPaste, CopyPlus, Trash2, EyeOff, Lock } from 'lucide-react';
 
 export function EditorShell() {
@@ -287,6 +288,10 @@ export function EditorShell() {
                             <ColorsPanel
                                 onClose={() => setRightPanel(null)}
                             />
+                        ) : rightPanel === 'filters' ? (
+                            <div className="w-80 bg-white border-l border-gray-200 h-full overflow-hidden">
+                                <FilterPanel />
+                            </div>
                         ) : (
                             <ImageEditPanel />
                         )}

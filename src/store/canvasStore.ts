@@ -260,6 +260,7 @@ export const useCanvasStore = create<CanvasStore>()(
                 style: { ...createDefaultStyle(), fill: null, ...options?.style },
                 filters: { ...createDefaultImageFilter(), ...options?.filters },
                 crop: null,
+                colorReplace: null,
                 crossOrigin: 'anonymous',
                 locked: false,
                 visible: true,
@@ -350,7 +351,8 @@ export const useCanvasStore = create<CanvasStore>()(
                 return {
                     ...JSON.parse(JSON.stringify(el)),
                     id: newId,
-                    name: `${el.name} (Copy)`,
+                    // Remove existing (Copy) suffix before adding new one
+                    name: `${el.name.replace(/\s*\(Copy\)$/i, '')} (Copy)`,
                     transform: {
                         ...el.transform,
                         x: el.transform.x + 20,
