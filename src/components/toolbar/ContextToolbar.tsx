@@ -4,7 +4,7 @@ import { useMemo, useState, useRef } from 'react';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useEditorStore, useActivePage } from '@/store/editorStore';
 import { SolidBackground } from '@/types/project';
-import { ImageElement } from '@/types/canvas';
+import { ImageElement, TextElement } from '@/types/canvas';
 import { COLOR_PALETTE, applyColorReplacement } from '@/utils/colorReplace';
 import { getFabricCanvas } from '@/engine/fabric/FabricCanvas';
 import { fabric } from 'fabric';
@@ -19,6 +19,19 @@ import {
     Group,
     Ungroup,
     SlidersHorizontal,
+    Bold,
+    Italic,
+    Underline,
+    Strikethrough,
+    CaseSensitive,
+    AlignLeft,
+    AlignCenter,
+    AlignRight,
+    List,
+    ListOrdered,
+    Minus,
+    Plus,
+    Palette,
 } from 'lucide-react';
 
 export function ContextToolbar() {
@@ -39,6 +52,9 @@ export function ContextToolbar() {
     const updatePage = useEditorStore((state) => state.updatePage);
     const openColorsPanel = useEditorStore((state) => state.openColorsPanel);
     const openFiltersPanel = useEditorStore((state) => state.openFiltersPanel);
+
+    // List type state for text elements
+    const [listType, setListType] = useState<'none' | 'bullet' | 'numbered'>('none');
 
     // Get current background color
     const currentBgColor = useMemo(() => {
@@ -171,6 +187,70 @@ export function ContextToolbar() {
     const isGroup = element?.type === 'group';
     const canGroup = selectedElements.length > 1;
     const isImage = element?.type === 'image';
+    const isText = element?.type === 'text';
+    const textElement = isText ? (element as TextElement) : null;
+
+    // Text formatting handlers
+    const handleFontSizeChange = (delta: number) => {
+        if (!textElement) return;
+        const newSize = Math.max(8, Math.min(200, textElement.textStyle.fontSize + delta));
+        updateElement(textElement.id, {
+            textStyle: { ...textElement.textStyle, fontSize: newSize }
+        } as Partial<TextElement>);
+    };
+
+    const toggleBold = () => {
+        if (!textElement) return;
+        const isBold = textElement.textStyle.fontWeight === 'bold' || textElement.textStyle.fontWeight === 700;
+        updateElement(textElement.id, {
+            textStyle: { ...textElement.textStyle, fontWeight: isBold ? 'normal' : 'bold' }
+        } as Partial<TextElement>);
+    };
+
+    const toggleItalic = () => {
+        if (!textElement) return;
+        updateElement(textElement.id, {
+            textStyle: { ...textElement.textStyle, fontStyle: textElement.textStyle.fontStyle === 'italic' ? 'normal' : 'italic' }
+        } as Partial<TextElement>);
+    };
+
+    const toggleUnderline = () => {
+        if (!textElement) return;
+        const isUnderline = textElement.textStyle.textDecoration === 'underline';
+        updateElement(textElement.id, {
+            textStyle: { ...textElement.textStyle, textDecoration: isUnderline ? 'none' : 'underline' }
+        } as Partial<TextElement>);
+    };
+
+    const toggleStrikethrough = () => {
+        if (!textElement) return;
+        const isStrikethrough = textElement.textStyle.textDecoration === 'line-through';
+        updateElement(textElement.id, {
+            textStyle: { ...textElement.textStyle, textDecoration: isStrikethrough ? 'none' : 'line-through' }
+        } as Partial<TextElement>);
+    };
+
+    const toggleUppercase = () => {
+        if (!textElement) return;
+        const isUppercase = textElement.textStyle.textTransform === 'uppercase';
+        updateElement(textElement.id, {
+            textStyle: { ...textElement.textStyle, textTransform: isUppercase ? 'none' : 'uppercase' }
+        } as Partial<TextElement>);
+    };
+
+    const setAlignment = (align: 'left' | 'center' | 'right') => {
+        if (!textElement) return;
+        updateElement(textElement.id, {
+            textStyle: { ...textElement.textStyle, textAlign: align }
+        } as Partial<TextElement>);
+    };
+
+    const handleTextColorChange = (color: string) => {
+        if (!textElement) return;
+        updateElement(textElement.id, {
+            style: { ...textElement.style, fill: color }
+        } as Partial<TextElement>);
+    };
 
     return (
         <div className="h-12 bg-[#F8F9FA] border-b border-gray-200 flex items-center px-4 gap-2">
@@ -223,6 +303,149 @@ export function ContextToolbar() {
                         <SlidersHorizontal size={16} />
                         <span className="text-xs font-medium">Filters</span>
                     </button>
+                    <div className="w-px h-6 bg-gray-200" />
+                </>
+            )}
+
+            {/* Text Formatting Options */}
+            {isText && textElement && (
+                <>
+                    {/* Font Size */}
+                    <div className="flex items-center gap-1 px-2">
+                        <button
+                            onClick={() => handleFontSizeChange(-2)}
+                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                            title="Decrease font size"
+                        >
+                            <Minus size={14} />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700 w-8 text-center">
+                            {textElement.textStyle.fontSize}
+                        </span>
+                        <button
+                            onClick={() => handleFontSizeChange(2)}
+                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                            title="Increase font size"
+                        >
+                            <Plus size={14} />
+                        </button>
+                    </div>
+
+                    <div className="w-px h-6 bg-gray-200" />
+
+                    {/* Bold & Italic */}
+                    <div className="flex items-center gap-0.5">
+                        <button
+                            onClick={toggleBold}
+                            className={`p-2 rounded transition-all ${textElement.textStyle.fontWeight === 'bold' || textElement.textStyle.fontWeight === 700
+                                ? 'bg-blue-100 text-blue-600'
+                                : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
+                                }`}
+                            title="Bold"
+                        >
+                            <Bold size={16} />
+                        </button>
+                        <button
+                            onClick={toggleItalic}
+                            className={`p-2 rounded transition-all ${textElement.textStyle.fontStyle === 'italic'
+                                ? 'bg-blue-100 text-blue-600'
+                                : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
+                                }`}
+                            title="Italic"
+                        >
+                            <Italic size={16} />
+                        </button>
+                        <button
+                            onClick={toggleUnderline}
+                            className={`p-2 rounded transition-all ${textElement.textStyle.textDecoration === 'underline'
+                                ? 'bg-blue-100 text-blue-600'
+                                : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
+                                }`}
+                            title="Underline"
+                        >
+                            <Underline size={16} />
+                        </button>
+                        <button
+                            onClick={toggleStrikethrough}
+                            className={`p-2 rounded transition-all ${textElement.textStyle.textDecoration === 'line-through'
+                                ? 'bg-blue-100 text-blue-600'
+                                : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
+                                }`}
+                            title="Strikethrough"
+                        >
+                            <Strikethrough size={16} />
+                        </button>
+                        <button
+                            onClick={toggleUppercase}
+                            className={`p-2 rounded transition-all ${textElement.textStyle.textTransform === 'uppercase'
+                                ? 'bg-blue-100 text-blue-600'
+                                : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
+                                }`}
+                            title="Uppercase"
+                        >
+                            <CaseSensitive size={16} />
+                        </button>
+                    </div>
+
+                    <div className="w-px h-6 bg-gray-200" />
+
+                    {/* Alignment - Single button that cycles through options */}
+                    <button
+                        onClick={() => {
+                            const alignments: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
+                            const currentIndex = alignments.indexOf(textElement.textStyle.textAlign as 'left' | 'center' | 'right');
+                            const nextIndex = (currentIndex + 1) % alignments.length;
+                            setAlignment(alignments[nextIndex]);
+                        }}
+                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                        title={`Align ${textElement.textStyle.textAlign} (click to change)`}
+                    >
+                        {textElement.textStyle.textAlign === 'left' && <AlignLeft size={16} />}
+                        {textElement.textStyle.textAlign === 'center' && <AlignCenter size={16} />}
+                        {textElement.textStyle.textAlign === 'right' && <AlignRight size={16} />}
+                        {!['left', 'center', 'right'].includes(textElement.textStyle.textAlign) && <AlignLeft size={16} />}
+                    </button>
+
+                    <div className="w-px h-6 bg-gray-200" />
+
+                    {/* List - Single button that cycles through options */}
+                    <button
+                        onClick={() => {
+                            const types: ('none' | 'bullet' | 'numbered')[] = ['none', 'bullet', 'numbered'];
+                            const currentIndex = types.indexOf(listType);
+                            const nextIndex = (currentIndex + 1) % types.length;
+                            setListType(types[nextIndex]);
+                        }}
+                        className={`p-2 rounded transition-all ${listType !== 'none'
+                            ? 'bg-blue-100 text-blue-600'
+                            : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
+                            }`}
+                        title={listType === 'none' ? 'No list' : listType === 'bullet' ? 'Bullet list' : 'Numbered list'}
+                    >
+                        {listType === 'numbered' ? <ListOrdered size={16} /> : <List size={16} />}
+                    </button>
+
+                    <div className="w-px h-6 bg-gray-200" />
+
+                    {/* Text Color */}
+                    <div className="relative">
+                        <input
+                            type="color"
+                            value={typeof textElement.style.fill === 'string' ? textElement.style.fill : '#000000'}
+                            onChange={(e) => handleTextColorChange(e.target.value)}
+                            className="absolute inset-0 opacity-0 w-8 h-8 cursor-pointer"
+                            title="Text color"
+                        />
+                        <div
+                            className="w-7 h-7 rounded-lg border-2 border-gray-200 hover:border-blue-400 transition-all cursor-pointer flex items-center justify-center"
+                            style={{ backgroundColor: typeof textElement.style.fill === 'string' ? textElement.style.fill : '#000000' }}
+                            title="Text color"
+                        >
+                            <span className="text-xs font-bold" style={{ color: typeof textElement.style.fill === 'string' && textElement.style.fill.toLowerCase() !== '#ffffff' && textElement.style.fill.toLowerCase() !== 'white' ? '#fff' : '#000' }}>A</span>
+                        </div>
+                    </div>
+
+                    <div className="w-px h-6 bg-gray-200" />
                 </>
             )}
 

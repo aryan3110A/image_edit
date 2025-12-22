@@ -19,6 +19,7 @@ import { UploadPanel } from './UploadPanel';
 import { PhotosPanel } from './PhotosPanel';
 import { LayersPanel } from './LayersPanel';
 import { AnimationsPanel } from './AnimationsPanel';
+import { LibraryPanel } from './LibraryPanel';
 
 interface SidebarTab {
     id: SidebarPanel;
@@ -48,7 +49,7 @@ export function SidebarContainer() {
     const renderPanel = () => {
         switch (activePanel) {
             case 'library':
-                return <TemplatesPanel />;
+                return <LibraryPanel />;
             case 'templates':
                 return <TemplatesPanel />;
             case 'assets':
