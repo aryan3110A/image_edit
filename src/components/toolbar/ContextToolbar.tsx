@@ -259,7 +259,7 @@ export function ContextToolbar() {
             <div className="flex items-center gap-2 pr-4 border-r border-gray-200">
                 <span className="text-gray-800 text-sm font-medium">
                     {selectedElements.length === 1
-                        ? element?.name || 'Unnamed'
+                        ? element?.name || 'Unnamed.'
                         : `${selectedElements.length} elements selected. `}
                 </span>
             </div>
